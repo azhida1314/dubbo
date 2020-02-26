@@ -100,10 +100,12 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
                 return registry;
             }
             //create registry by spi/ioc
+            //根据url地址创建和注册中心的连接
             registry = createRegistry(url);
             if (registry == null) {
                 throw new IllegalStateException("Can not create registry " + url);
             }
+            //放入连接到缓存
             REGISTRIES.put(key, registry);
             return registry;
         } finally {

@@ -17,23 +17,14 @@
 package org.apache.dubbo.config.spring.schema;
 
 import org.apache.dubbo.common.Version;
-
-import org.apache.dubbo.config.ApplicationConfig;
-import org.apache.dubbo.config.MetadataReportConfig;
-import org.apache.dubbo.config.ModuleConfig;
-import org.apache.dubbo.config.RegistryConfig;
-import org.apache.dubbo.config.MonitorConfig;
-import org.apache.dubbo.config.MetricsConfig;
-import org.apache.dubbo.config.ProviderConfig;
-import org.apache.dubbo.config.ConsumerConfig;
-import org.apache.dubbo.config.ProtocolConfig;
+import org.apache.dubbo.config.*;
 import org.apache.dubbo.config.spring.ConfigCenterBean;
 import org.apache.dubbo.config.spring.ReferenceBean;
 import org.apache.dubbo.config.spring.ServiceBean;
-
 import org.springframework.beans.factory.xml.NamespaceHandlerSupport;
 
 /**
+ * 继承spring标签解析器
  * DubboNamespaceHandler
  *
  * @export
@@ -44,8 +35,12 @@ public class DubboNamespaceHandler extends NamespaceHandlerSupport {
         Version.checkDuplicate(DubboNamespaceHandler.class);
     }
 
+    /**
+     * 解析标签初始化
+     */
     @Override
     public void init() {
+        //解析标签 组装实体bean 每个标签对应一个实例
         registerBeanDefinitionParser("application", new DubboBeanDefinitionParser(ApplicationConfig.class, true));
         registerBeanDefinitionParser("module", new DubboBeanDefinitionParser(ModuleConfig.class, true));
         registerBeanDefinitionParser("registry", new DubboBeanDefinitionParser(RegistryConfig.class, true));

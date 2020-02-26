@@ -38,22 +38,35 @@ public class RouterChain<T> {
     // containing all routers, reconstruct every time 'route://' urls change.
     private volatile List<Router> routers = Collections.emptyList();
 
-    // Fixed router instances: ConfigConditionRouter, TagRouter, e.g., the rule for each instance may change but the
-    // instance will never delete or recreate.
+    // Fixed router instances: ConfigConditionRouter, TagRouter, e.g., the rule for each instance may change but the instance will never delete or recreate.
     private List<Router> builtinRouters = Collections.emptyList();
 
+    /**
+     * 根据url创建路由链
+     *
+     * @param url
+     * @param <T>
+     * @return
+     */
     public static <T> RouterChain<T> buildChain(URL url) {
         return new RouterChain<>(url);
     }
 
+    /**
+     * 根据url创建路由链
+     *
+     * @param url consumer://10.2.62.152/org.apache.dubbo.demo.DemoService?application=demo-consumer&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1623&qos.port=33333&release=2.7.4&side=consumer&sticky=false&timestamp=1576043351756
+     */
     private RouterChain(URL url) {
+        //找活跃的扩展
         List<RouterFactory> extensionFactories = ExtensionLoader.getExtensionLoader(RouterFactory.class)
                 .getActivateExtension(url, (String[]) null);
 
+        //MockRouterFactory tagRouterFactory  AppRouterFactory  ServiceRouterFactory
         List<Router> routers = extensionFactories.stream()
                 .map(factory -> factory.getRouter(url))
                 .collect(Collectors.toList());
-
+        //排序  MockInvokersSelector TagRouter  AppRouter  ServiceRouter
         initWithRouters(routers);
     }
 
@@ -88,6 +101,7 @@ public class RouterChain<T> {
     }
 
     /**
+     * 路透规则过滤
      *
      * @param url
      * @param invocation

@@ -18,19 +18,10 @@ package org.apache.dubbo.config.spring;
 
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.config.ApplicationConfig;
-import org.apache.dubbo.config.ConfigCenterConfig;
-import org.apache.dubbo.config.ConsumerConfig;
-import org.apache.dubbo.config.MetadataReportConfig;
-import org.apache.dubbo.config.MetricsConfig;
-import org.apache.dubbo.config.ModuleConfig;
-import org.apache.dubbo.config.MonitorConfig;
-import org.apache.dubbo.config.ReferenceConfig;
-import org.apache.dubbo.config.RegistryConfig;
+import org.apache.dubbo.config.*;
 import org.apache.dubbo.config.annotation.Reference;
 import org.apache.dubbo.config.spring.extension.SpringExtensionFactory;
 import org.apache.dubbo.config.support.Parameter;
-
 import org.springframework.beans.factory.BeanFactoryUtils;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.FactoryBean;
@@ -65,9 +56,11 @@ public class ReferenceBean<T> extends ReferenceConfig<T> implements FactoryBean,
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) {
         this.applicationContext = applicationContext;
+        //向SpringExtensionFactory注入上下文 当spi的ioc进行注入时可以获取由spring工厂保存的实现类
         SpringExtensionFactory.addApplicationContext(applicationContext);
     }
 
+    //获取调用的代理对象
     @Override
     public Object getObject() {
         return get();
@@ -84,6 +77,7 @@ public class ReferenceBean<T> extends ReferenceConfig<T> implements FactoryBean,
         return true;
     }
 
+    //执行初始化赋值操作
     @Override
     @SuppressWarnings({"unchecked"})
     public void afterPropertiesSet() throws Exception {
@@ -233,8 +227,9 @@ public class ReferenceBean<T> extends ReferenceConfig<T> implements FactoryBean,
                 }
             }
         }
-
+        //默认情况下，Dubbo 使用懒汉式引用服务。如果需要使用饿汉式，可通过配置 <dubbo:reference> 的 init 属性开启
         if (shouldInit()) {
+            //实际发生动作  得到消费方代理对象
             getObject();
         }
     }

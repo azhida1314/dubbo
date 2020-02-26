@@ -47,6 +47,7 @@ public class ListenerExporterWrapper<T> implements Exporter<T> {
             for (ExporterListener listener : listeners) {
                 if (listener != null) {
                     try {
+                        //如果有监听器  会通知相关的监听器
                         listener.exported(this);
                     } catch (RuntimeException t) {
                         logger.error(t.getMessage(), t);

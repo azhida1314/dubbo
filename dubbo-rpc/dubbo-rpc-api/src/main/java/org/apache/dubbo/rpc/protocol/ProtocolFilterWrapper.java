@@ -19,14 +19,7 @@ package org.apache.dubbo.rpc.protocol;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.extension.ExtensionLoader;
-import org.apache.dubbo.rpc.Exporter;
-import org.apache.dubbo.rpc.Filter;
-import org.apache.dubbo.rpc.Invocation;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.ListenableFilter;
-import org.apache.dubbo.rpc.Protocol;
-import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.*;
 
 import java.util.List;
 
@@ -35,6 +28,8 @@ import static org.apache.dubbo.rpc.Constants.REFERENCE_FILTER_KEY;
 import static org.apache.dubbo.rpc.Constants.SERVICE_FILTER_KEY;
 
 /**
+ * invoker 包装类
+ * 执行filter链
  * ListenerProtocol
  */
 public class ProtocolFilterWrapper implements Protocol {
@@ -49,7 +44,15 @@ public class ProtocolFilterWrapper implements Protocol {
     }
 
 
-
+    /**
+     * 构建调用链
+     *
+     * @param invoker
+     * @param key     reference.filter
+     * @param group   provider
+     * @param <T>
+     * @return
+     */
     private static <T> Invoker<T> buildInvokerChain(final Invoker<T> invoker, String key, String group) {
         Invoker<T> last = invoker;
         List<Filter> filters = ExtensionLoader.getExtensionLoader(Filter.class).getActivateExtension(invoker.getUrl(), key, group);
@@ -75,6 +78,8 @@ public class ProtocolFilterWrapper implements Protocol {
                         return invoker.isAvailable();
                     }
 
+                    //先执行过滤器  再执行真正的方法
+                    //不是在导出的时候执行 而是在方法调用的时候执行
                     @Override
                     public Result invoke(Invocation invocation) throws RpcException {
                         Result asyncResult;
@@ -114,11 +119,14 @@ public class ProtocolFilterWrapper implements Protocol {
         return protocol.getDefaultPort();
     }
 
+
     @Override
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+        // 是不是registry开头的
         if (REGISTRY_PROTOCOL.equals(invoker.getUrl().getProtocol())) {
             return protocol.export(invoker);
         }
+        //构建 provider 端的可用过滤器
         return protocol.export(buildInvokerChain(invoker, SERVICE_FILTER_KEY, CommonConstants.PROVIDER));
     }
 
@@ -138,7 +146,7 @@ public class ProtocolFilterWrapper implements Protocol {
     /**
      * Register callback for each filter may be better, just like {@link java.util.concurrent.CompletionStage}, each callback
      * registration generates a new CompletionStage whose status is determined by the original CompletionStage.
-     *
+     * <p>
      * If bridging status between filters is proved to not has significant performance drop, consider revert to the following commit:
      * https://github.com/apache/dubbo/pull/4127
      */

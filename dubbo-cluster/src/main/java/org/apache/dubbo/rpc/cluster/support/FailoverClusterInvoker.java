@@ -20,11 +20,7 @@ import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.NetUtils;
-import org.apache.dubbo.rpc.Invocation;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcContext;
-import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.*;
 import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 import org.apache.dubbo.rpc.support.RpcUtils;
@@ -38,11 +34,12 @@ import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_RETRIES;
 import static org.apache.dubbo.rpc.cluster.Constants.RETRIES_KEY;
 
 /**
+ * 当调用失败时，记录初始错误并重试其他调用者（重试n次，这意味着最多将调用n个不同的调用者 ，重试会导致延迟
+ * <p>
  * When invoke fails, log the initial error and retry other invokers (retry n times, which means at most n different invokers will be invoked)
  * Note that retry causes latency.
  * <p>
  * <a href="http://en.wikipedia.org/wiki/Failover">Failover</a>
- *
  */
 public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
 
@@ -52,19 +49,32 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
         super(directory);
     }
 
+    /**
+     * 失败重试逻辑
+     *
+     * @param invocation  调用信息
+     * @param invokers    经过路由后的invoker
+     * @param loadbalance 负载策略 根据 策略 选择一个invoker
+     * @return
+     * @throws RpcException
+     */
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Result doInvoke(Invocation invocation, final List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
         List<Invoker<T>> copyInvokers = invokers;
         checkInvokers(copyInvokers, invocation);
         String methodName = RpcUtils.getMethodName(invocation);
+        //获得调用总次数 重试次数+1 默认是 2
         int len = getUrl().getMethodParameter(methodName, RETRIES_KEY, DEFAULT_RETRIES) + 1;
         if (len <= 0) {
             len = 1;
         }
         // retry loop.
-        RpcException le = null; // last exception.
-        List<Invoker<T>> invoked = new ArrayList<Invoker<T>>(copyInvokers.size()); // invoked invokers.
+        // last exception.
+        RpcException le = null;
+        //存放已经调用过得invoker 当再次重试时不应包含
+        // invoked invokers.
+        List<Invoker<T>> invoked = new ArrayList<Invoker<T>>(copyInvokers.size());
         Set<String> providers = new HashSet<String>(len);
         for (int i = 0; i < len; i++) {
             //Reselect before retry to avoid a change of candidate `invokers`.
@@ -75,10 +85,13 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 // check again
                 checkInvokers(copyInvokers, invocation);
             }
+            //根据路由规则选出可以使用的invoker
+            //
             Invoker<T> invoker = select(loadbalance, invocation, copyInvokers, invoked);
             invoked.add(invoker);
             RpcContext.getContext().setInvokers((List) invoked);
             try {
+                //真正的调用
                 Result result = invoker.invoke(invocation);
                 if (le != null && logger.isWarnEnabled()) {
                     logger.warn("Although retry the method " + methodName
@@ -93,7 +106,8 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 }
                 return result;
             } catch (RpcException e) {
-                if (e.isBiz()) { // biz exception.
+                // biz exception.
+                if (e.isBiz()) {
                     throw e;
                 }
                 le = e;

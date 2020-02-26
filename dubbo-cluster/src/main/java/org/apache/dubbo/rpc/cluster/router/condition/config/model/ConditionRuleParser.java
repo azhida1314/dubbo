@@ -42,6 +42,7 @@ public class ConditionRuleParser {
 
         Yaml yaml = new Yaml(constructor);
         ConditionRouterRule rule = yaml.load(rawRule);
+        //加载数据  放入到list中
         rule.setRawRule(rawRule);
         if (CollectionUtils.isEmpty(rule.getConditions())) {
             rule.setValid(false);

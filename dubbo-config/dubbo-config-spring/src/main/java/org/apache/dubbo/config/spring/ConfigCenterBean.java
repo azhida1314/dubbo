@@ -58,6 +58,7 @@ public class ConfigCenterBean extends ConfigCenterConfig implements ApplicationC
     @Override
     public void setEnvironment(Environment environment) {
         if (includeSpringEnv) {
+            //从配置中心的节点获取数据  放入到map中
             // Get PropertySource mapped to 'dubbo.properties' in Spring Environment.
             Map<String, String> externalProperties = getConfigurations(getConfigFile(), environment);
             // Get PropertySource mapped to 'application.dubbo.properties' in Spring Environment.

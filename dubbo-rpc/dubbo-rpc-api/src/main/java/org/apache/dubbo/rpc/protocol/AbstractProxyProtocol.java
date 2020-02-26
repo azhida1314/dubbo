@@ -96,7 +96,9 @@ public abstract class AbstractProxyProtocol extends AbstractProtocol {
 
     @Override
     protected <T> Invoker<T> protocolBindingRefer(final Class<T> type, final URL url) throws RpcException {
+        //返回Invoker对象包装了代理对象
         final Invoker<T> target = proxyFactory.getInvoker(doRefer(type, url), type, url);
+
         Invoker<T> invoker = new AbstractInvoker<T>(type, url) {
             @Override
             protected Result doInvoke(Invocation invocation) throws Throwable {

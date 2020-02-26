@@ -24,11 +24,7 @@ import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
-import org.apache.dubbo.common.utils.ClassUtils;
-import org.apache.dubbo.common.utils.CollectionUtils;
-import org.apache.dubbo.common.utils.MethodUtils;
-import org.apache.dubbo.common.utils.ReflectUtils;
-import org.apache.dubbo.common.utils.StringUtils;
+import org.apache.dubbo.common.utils.*;
 import org.apache.dubbo.config.context.ConfigConfigurationAdapter;
 import org.apache.dubbo.config.support.Parameter;
 import org.apache.dubbo.rpc.model.ConsumerMethodModel;
@@ -391,6 +387,14 @@ public abstract class AbstractConfig implements Serializable {
         }).collect(Collectors.toSet());
     }
 
+    /**
+     * 获取属性名称
+     *
+     * @param clazz
+     * @param setter
+     * @return
+     * @throws Exception
+     */
     private static String extractPropertyName(Class<?> clazz, Method setter) throws Exception {
         String propertyName = setter.getName().substring("set".length());
         Method getter = null;
@@ -524,6 +528,7 @@ public abstract class AbstractConfig implements Serializable {
     }
 
     /**
+     * 获取的 属性名称和属性值的集合
      * Should be called after Config was fully initialized.
      * // FIXME: this method should be completely replaced by appendParameters
      *
@@ -568,6 +573,7 @@ public abstract class AbstractConfig implements Serializable {
                         metaData.put(key, null);
                     }
                 } else if (isParametersGetter(method)) {
+                    //调用set方法 完成赋值
                     Map<String, String> map = (Map<String, String>) method.invoke(this, new Object[0]);
                     metaData.putAll(convert(map, ""));
                 }
@@ -587,10 +593,16 @@ public abstract class AbstractConfig implements Serializable {
         this.prefix = prefix;
     }
 
+    /**
+     * 取最高优先级的值
+     */
     public void refresh() {
         try {
+            //混合的配置中心
             CompositeConfiguration compositeConfiguration = Environment.getInstance().getConfiguration(getPrefix(), getId());
+            //bean中的默认属性
             Configuration config = new ConfigConfigurationAdapter(this);
+            //配置中心优先 默认为true
             if (Environment.getInstance().isConfigCenterFirst()) {
                 // The sequence would be: SystemConfiguration -> AppExternalConfiguration -> ExternalConfiguration -> AbstractConfig -> PropertiesConfiguration
                 compositeConfiguration.addConfiguration(4, config);
@@ -600,12 +612,17 @@ public abstract class AbstractConfig implements Serializable {
             }
 
             // loop methods, get override value and set the new value back to method
+            //获得所有的方法
             Method[] methods = getClass().getMethods();
             for (Method method : methods) {
+                //是set方法
                 if (MethodUtils.isSetter(method)) {
+                    //根据属性名称获得属性值
+                    //从混合的配置中心中获取数据  因为是按优先级排序的  找到就返回 低优先级的不会覆盖高优先级
                     String value = StringUtils.trim(compositeConfiguration.getString(extractPropertyName(getClass(), method)));
                     // isTypeMatch() is called to avoid duplicate and incorrect update, for example, we have two 'setGeneric' methods in ReferenceConfig.
                     if (StringUtils.isNotEmpty(value) && ClassUtils.isTypeMatch(method.getParameterTypes()[0], value)) {
+                        //属性赋值
                         method.invoke(this, ClassUtils.convertPrimitive(method.getParameterTypes()[0], value));
                     }
                 } else if (isParametersSetter(method)) {

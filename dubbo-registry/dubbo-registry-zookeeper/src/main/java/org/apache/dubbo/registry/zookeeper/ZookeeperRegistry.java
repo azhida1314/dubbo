@@ -38,23 +38,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import static org.apache.dubbo.common.constants.CommonConstants.ANY_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PATH_SEPARATOR;
-import static org.apache.dubbo.common.constants.CommonConstants.PROTOCOL_SEPARATOR;
-import static org.apache.dubbo.common.constants.RegistryConstants.CATEGORY_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.CONFIGURATORS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.CONSUMERS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.DEFAULT_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.DYNAMIC_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.EMPTY_PROTOCOL;
-import static org.apache.dubbo.common.constants.RegistryConstants.PROVIDERS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.ROUTERS_CATEGORY;
+import static org.apache.dubbo.common.constants.CommonConstants.*;
+import static org.apache.dubbo.common.constants.RegistryConstants.*;
 
 /**
  * ZookeeperRegistry
- *
  */
 public class ZookeeperRegistry extends FailbackRegistry {
 
@@ -125,6 +113,12 @@ public class ZookeeperRegistry extends FailbackRegistry {
         }
     }
 
+    /**
+     * 进行订阅
+     *
+     * @param url      consumer://10.2.62.152/org.apache.dubbo.demo.DemoService?application=demo-consumer&category=providers,configurators,routers&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1839&qos.port=33333&release=2.7.4&side=consumer&sticky=false&timestamp=1576044660196
+     * @param listener 监听器 registryDirectory
+     */
     @Override
     public void doSubscribe(final URL url, final NotifyListener listener) {
         try {
@@ -160,7 +154,14 @@ public class ZookeeperRegistry extends FailbackRegistry {
                     }
                 }
             } else {
+                //0 = {URL@3009} "dubbo://10.2.62.152:20881/org.apache.dubbo.demo.DemoService?anyhost=true&application=demo-provider&bean.name=org.apache.dubbo.demo.DemoService&deprecated=false&dubbo=2.0.2&dynamic=true&generic=false&interface=org.apache.dubbo.demo.DemoService&methods=sayHello&pid=1620&release=2.7.4&side=provider&timestamp=1576043302102"
+                // 1 = {URL@3046} "empty://10.2.62.152/org.apache.dubbo.demo.DemoService?application=demo-consumer&category=configurators&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1982&qos.port=33333&release=2.7.4&side=consumer&sticky=false&timestamp=1576045560410"
+                //2 = {URL@3136} "empty://10.2.62.152/org.apache.dubbo.demo.DemoService?application=demo-consumer&category=routers&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1982&qos.port=33333&release=2.7.4&side=consumer&sticky=false&timestamp=1576045560410"
                 List<URL> urls = new ArrayList<>();
+                // "/dubbo/org.apache.dubbo.demo.DemoService/providers"
+                // "/dubbo/org.apache.dubbo.demo.DemoService/configurators"
+                // "/dubbo/org.apache.dubbo.demo.DemoService/routers"
+                //三个路径
                 for (String path : toCategoriesPath(url)) {
                     ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.get(url);
                     if (listeners == null) {
@@ -171,7 +172,7 @@ public class ZookeeperRegistry extends FailbackRegistry {
                     if (zkListener == null) {
                         listeners.putIfAbsent(listener, (parentPath, currentChilds) -> ZookeeperRegistry.this.notify(url, listener, toUrlsWithEmpty(url, parentPath, currentChilds)));
                         zkListener = listeners.get(listener);
-                    }
+                    }//对路径创建监听器
                     zkClient.create(path, false);
                     List<String> children = zkClient.addChildListener(path, zkListener);
                     if (children != null) {

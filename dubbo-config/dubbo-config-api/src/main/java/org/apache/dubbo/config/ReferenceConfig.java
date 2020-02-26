@@ -20,11 +20,7 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.bytecode.Wrapper;
 import org.apache.dubbo.common.extension.ExtensionLoader;
-import org.apache.dubbo.common.utils.ClassUtils;
-import org.apache.dubbo.common.utils.CollectionUtils;
-import org.apache.dubbo.common.utils.ConfigUtils;
-import org.apache.dubbo.common.utils.NetUtils;
-import org.apache.dubbo.common.utils.StringUtils;
+import org.apache.dubbo.common.utils.*;
 import org.apache.dubbo.config.annotation.Reference;
 import org.apache.dubbo.config.context.ConfigManager;
 import org.apache.dubbo.config.support.Parameter;
@@ -47,26 +43,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
-import static org.apache.dubbo.common.constants.CommonConstants.ANY_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.CLUSTER_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SEPARATOR;
-import static org.apache.dubbo.common.constants.CommonConstants.CONSUMER_SIDE;
-import static org.apache.dubbo.common.constants.CommonConstants.DUBBO;
-import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.LOCALHOST_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.METHODS_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.MONITOR_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.REVISION_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.SEMICOLON_SPLIT_PATTERN;
-import static org.apache.dubbo.common.constants.CommonConstants.SIDE_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.*;
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PROTOCOL;
 import static org.apache.dubbo.common.utils.NetUtils.isInvalidLocalHost;
 import static org.apache.dubbo.config.Constants.DUBBO_IP_TO_REGISTRY;
@@ -85,6 +64,9 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
     private static final long serialVersionUID = -5864351140409987595L;
 
     /**
+     * ExtensionLoader.getExtensionLoader(Protocol.class) 获得加载器
+     * .getAdaptiveExtension() 创建拓展的代理对象
+     * 代理对象执行时根据参数选择实际的对象 通过url可以取的想要的信息
      * The {@link Protocol} implementation with adaptive functionality,it will be different in different scenarios.
      * A particular {@link Protocol} implementation is determined by the protocol attribute in the {@link URL}.
      * For example:
@@ -241,12 +223,16 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
     }
 
     public synchronized T get() {
+        //检查更新配置
+        //和服务暴露时一样  根具不同的配置级别选择最终应用的属性
         checkAndUpdateSubConfigs();
 
         if (destroyed) {
             throw new IllegalStateException("The invoker of ReferenceConfig(" + url + ") has already destroyed!");
         }
+        //幂等  方法被调用多次 和调用一次效果一样
         if (ref == null) {
+            //返回代理对象
             init();
         }
         return ref;
@@ -275,17 +261,19 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         }
         checkStubAndLocal(interfaceClass);
         checkMock(interfaceClass);
+        //消费方的参数列表
         Map<String, String> map = new HashMap<String, String>();
 
         map.put(SIDE_KEY, CONSUMER_SIDE);
 
         appendRuntimeParameters(map);
+        //是否是泛化调用
         if (!ProtocolUtils.isGeneric(getGeneric())) {
             String revision = Version.getVersion(interfaceClass, version);
             if (revision != null && revision.length() > 0) {
                 map.put(REVISION_KEY, revision);
             }
-
+            //获得接口中提供的方法
             String[] methods = Wrapper.getWrapper(interfaceClass).getMethodNames();
             if (methods.length == 0) {
                 logger.warn("No method found in service interface " + interfaceClass.getName());
@@ -303,6 +291,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         appendParameters(map, consumer);
         appendParameters(map, this);
         Map<String, Object> attributes = null;
+        //方法标签不为空循环处理
         if (CollectionUtils.isNotEmpty(methods)) {
             attributes = new HashMap<String, Object>();
             for (MethodConfig methodConfig : methods) {
@@ -326,6 +315,9 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         }
         map.put(REGISTER_IP_KEY, hostToRegistry);
 
+        //
+
+        //实际动作创建代理对象
         ref = createProxy(map);
 
         String serviceKey = URL.buildKey(interfaceName, group, version);
@@ -349,6 +341,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
 
     @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
     private T createProxy(Map<String, String> map) {
+        //是否是injvm协议
         if (shouldJvmRefer(map)) {
             URL url = new URL(LOCAL_PROTOCOL, LOCALHOST_VALUE, 0, interfaceClass.getName()).addParameters(map);
             invoker = REF_PROTOCOL.refer(interfaceClass, url);
@@ -357,6 +350,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             }
         } else {
             urls.clear(); // reference retry init will add url to urls, lead to OOM
+            //是否配置了直连
             if (url != null && url.length() > 0) { // user specified URL, could be peer-to-peer address, or register center's address.
                 String[] us = SEMICOLON_SPLIT_PATTERN.split(url);
                 if (us != null && us.length > 0) {
@@ -365,24 +359,30 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                         if (StringUtils.isEmpty(url.getPath())) {
                             url = url.setPath(interfaceName);
                         }
+                        //指定连接注册中心  会获取这个注册中中心下所有注册的服务 当前类型的
                         if (REGISTRY_PROTOCOL.equals(url.getProtocol())) {
                             urls.add(url.addParameterAndEncoded(REFER_KEY, StringUtils.toQueryString(map)));
                         } else {
+                            //指定直连的服务
                             urls.add(ClusterUtils.mergeUrl(url, map));
                         }
                     }
                 }
             } else { // assemble URL from register center's configuration
                 // if protocols not injvm checkRegistry
-                if (!LOCAL_PROTOCOL.equalsIgnoreCase(getProtocol())){
+                //不是injvm协议
+                if (!LOCAL_PROTOCOL.equalsIgnoreCase(getProtocol())) {
+                    //检查注册中心配置是否存在
                     checkRegistry();
+                    //获取注册中心地址
+                    //registry://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-consumer&dubbo=2.0.2&pid=15682&qos.port=33333&registry=zookeeper&release=2.7.4&timestamp=1569672277070
                     List<URL> us = loadRegistries(false);
                     if (CollectionUtils.isNotEmpty(us)) {
                         for (URL u : us) {
                             URL monitorUrl = loadMonitor(u);
-                            if (monitorUrl != null) {
+                            if (monitorUrl != null) {//监控中心地址
                                 map.put(MONITOR_KEY, URL.encode(monitorUrl.toFullString()));
-                            }
+                            }//url变为  registry://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-consumer&dubbo=2.0.2&pid=1623&qos.port=33333&refer=application=demo-consumer&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1623&qos.port=33333&register.ip=10.2.62.152&release=2.7.4&side=consumer&sticky=false&timestamp=1576043351756&registry=zookeeper&release=2.7.4&timestamp=1576043557773
                             urls.add(u.addParameterAndEncoded(REFER_KEY, StringUtils.toQueryString(map)));
                         }
                     }
@@ -392,23 +392,38 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 }
             }
 
+            //与多个服务的负载均衡有关
+            // 如果只有一个提供者  创建一个 invoker
+            //  有多个提供者需要创建多次  每个服务提供者对应一个invoker
+            //与每个中转对象都要做链接
+            //一个注册中心
             if (urls.size() == 1) {
+                //spi通过自己编写代理类代码编译后生成的对象REF_PROTOCOL
+                //根据传入的url参数动态的判断要获取哪个协议的实现类
+                //如果是注册中心协议  registry  先走 RegistryProtocol
+                //其他的协议  会先走wrapper包装类 最后再调用的具体的实现类 spiAop的应用
                 invoker = REF_PROTOCOL.refer(interfaceClass, urls.get(0));
             } else {
                 List<Invoker<?>> invokers = new ArrayList<Invoker<?>>();
                 URL registryURL = null;
                 for (URL url : urls) {
+                    //直接服务提供者   url协议为服务暴漏时的协议 如 dubbo:// http:// 等
+                    // 如果是注册中心  则是registory://
                     invokers.add(REF_PROTOCOL.refer(interfaceClass, url));
                     if (REGISTRY_PROTOCOL.equals(url.getProtocol())) {
                         registryURL = url; // use last registry url
                     }
                 }
                 if (registryURL != null) { // registry url is available
+                    //有连的配置中心
                     // use RegistryAwareCluster only when register's CLUSTER is available
                     URL u = registryURL.addParameter(CLUSTER_KEY, RegistryAwareCluster.NAME);
                     // The invoker wrap relation would be: RegistryAwareClusterInvoker(StaticDirectory) -> FailoverClusterInvoker(RegistryDirectory, will execute route) -> Invoker
+                    //合并多个invoker  创建静态的是因为内部对各注册中心已经监听了变化 外部不需要再进行监听
                     invoker = CLUSTER.join(new StaticDirectory(u, invokers));
-                } else { // not a registry url, must be direct invoke.
+                } else {
+                    //如果全是直连的服务提供者  静态的服务目录 不需要变化
+                    // not a registry url, must be direct invoke.
                     invoker = CLUSTER.join(new StaticDirectory(invokers));
                 }
             }
@@ -429,6 +444,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             URL consumerURL = new URL(CONSUMER_PROTOCOL, map.remove(REGISTER_IP_KEY), 0, map.get(INTERFACE_KEY), map);
             metadataReportService.publishConsumer(consumerURL);
         }
+        //根据invoker 创建代理对象 org.apache.dubbo.rpc.proxy.wrapper.StubProxyFactoryWrapper.getProxy(org.apache.dubbo.rpc.Invoker<T>)
         // create service proxy
         return (T) PROXY_FACTORY.getProxy(invoker);
     }

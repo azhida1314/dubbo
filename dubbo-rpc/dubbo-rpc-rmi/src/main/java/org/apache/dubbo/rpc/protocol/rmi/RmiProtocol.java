@@ -55,6 +55,7 @@ public class RmiProtocol extends AbstractProxyProtocol {
 
     @Override
     protected <T> Runnable doExport(final T impl, Class<T> type, URL url) throws RpcException {
+        //创建中转对象
         RmiServiceExporter rmiServiceExporter = createExporter(impl, type, url, false);
         RmiServiceExporter genericServiceExporter = createExporter(impl, GenericService.class, url, true);
         return new Runnable() {
@@ -73,6 +74,7 @@ public class RmiProtocol extends AbstractProxyProtocol {
     @Override
     @SuppressWarnings("unchecked")
     protected <T> T doRefer(final Class<T> serviceType, final URL url) throws RpcException {
+        //消费端代理对象
         final RmiProxyFactoryBean rmiProxyFactoryBean = new RmiProxyFactoryBean();
         final String generic = url.getParameter(GENERIC_KEY);
         final boolean isGeneric = ProtocolUtils.isGeneric(generic) || serviceType.equals(GenericService.class);
@@ -135,13 +137,17 @@ public class RmiProtocol extends AbstractProxyProtocol {
 
     private <T> RmiServiceExporter createExporter(T impl, Class<?> type, URL url, boolean isGeneric) {
         final RmiServiceExporter rmiServiceExporter = new RmiServiceExporter();
+        //端口
         rmiServiceExporter.setRegistryPort(url.getPort());
         if (isGeneric) {
             rmiServiceExporter.setServiceName(url.getPath() + "/" + GENERIC_KEY);
         } else {
+            //服务url 包含接口全限定名
             rmiServiceExporter.setServiceName(url.getPath());
         }
+        //接口类型
         rmiServiceExporter.setServiceInterface(type);
+        //实际实现的对象
         rmiServiceExporter.setService(impl);
         try {
             rmiServiceExporter.afterPropertiesSet();

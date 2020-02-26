@@ -21,13 +21,7 @@ import org.apache.dubbo.common.URLBuilder;
 import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.config.Environment;
 import org.apache.dubbo.common.extension.ExtensionLoader;
-import org.apache.dubbo.common.utils.Assert;
-import org.apache.dubbo.common.utils.CollectionUtils;
-import org.apache.dubbo.common.utils.ConfigUtils;
-import org.apache.dubbo.common.utils.NetUtils;
-import org.apache.dubbo.common.utils.ReflectUtils;
-import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.common.utils.UrlUtils;
+import org.apache.dubbo.common.utils.*;
 import org.apache.dubbo.config.context.ConfigManager;
 import org.apache.dubbo.config.support.Parameter;
 import org.apache.dubbo.configcenter.DynamicConfiguration;
@@ -44,48 +38,19 @@ import org.apache.dubbo.rpc.model.ApplicationModel;
 import org.apache.dubbo.rpc.support.MockInvoker;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static org.apache.dubbo.common.config.ConfigurationUtils.parseProperties;
-import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.CLUSTER_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SEPARATOR;
-import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
-import static org.apache.dubbo.common.constants.CommonConstants.DUBBO_PROTOCOL;
-import static org.apache.dubbo.common.constants.CommonConstants.FILE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PATH_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PID_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PROTOCOL_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.RELEASE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.SHUTDOWN_WAIT_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.SHUTDOWN_WAIT_SECONDS_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.TIMESTAMP_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.*;
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PROTOCOL;
-import static org.apache.dubbo.common.constants.CommonConstants.D_REGISTRY_SPLIT_PATTERN;
 import static org.apache.dubbo.common.extension.ExtensionLoader.getExtensionLoader;
-import static org.apache.dubbo.config.Constants.DUBBO_IP_TO_REGISTRY;
-import static org.apache.dubbo.config.Constants.LAYER_KEY;
-import static org.apache.dubbo.config.Constants.LISTENER_KEY;
-import static org.apache.dubbo.config.Constants.REGISTRIES_SUFFIX;
+import static org.apache.dubbo.config.Constants.*;
 import static org.apache.dubbo.monitor.Constants.LOGSTAT_PROTOCOL;
-import static org.apache.dubbo.registry.Constants.REGISTER_IP_KEY;
+import static org.apache.dubbo.registry.Constants.*;
 import static org.apache.dubbo.registry.Constants.REGISTER_KEY;
-import static org.apache.dubbo.registry.Constants.SUBSCRIBE_KEY;
 import static org.apache.dubbo.remoting.Constants.DUBBO_VERSION_KEY;
-import static org.apache.dubbo.rpc.Constants.INVOKER_LISTENER_KEY;
-import static org.apache.dubbo.rpc.Constants.LOCAL_KEY;
-import static org.apache.dubbo.rpc.Constants.PROXY_KEY;
-import static org.apache.dubbo.rpc.Constants.REFERENCE_FILTER_KEY;
-import static org.apache.dubbo.rpc.Constants.RETURN_PREFIX;
-import static org.apache.dubbo.rpc.Constants.THROW_PREFIX;
+import static org.apache.dubbo.rpc.Constants.*;
 import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.TAG_KEY;
 
@@ -194,6 +159,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
      * Check whether the registry config is exists, and then conversion it to {@link RegistryConfig}
      */
     protected void checkRegistry() {
+
         loadRegistriesFromBackwardConfig();
 
         convertRegistryIdsToRegistries();
@@ -295,7 +261,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
             if (StringUtils.isNotEmpty(appGroup)) {
                 appConfigContent = dynamicConfiguration.getProperties
                         (StringUtils.isNotEmpty(configCenter.getAppConfigFile()) ? configCenter.getAppConfigFile() : configCenter.getConfigFile(),
-                         appGroup
+                                appGroup
                         );
             }
             try {
@@ -318,7 +284,6 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     }
 
     /**
-     *
      * Load the registry and conversion it to {@link URL}, the priority order is: system property > dubbo registry config
      *
      * @param provider whether it is the provider side
@@ -337,6 +302,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                     Map<String, String> map = new HashMap<String, String>();
                     appendParameters(map, application);
                     appendParameters(map, config);
+                    //把url的path写死 为 RegistryService的全限定名
                     map.put(PATH_KEY, RegistryService.class.getName());
                     appendRuntimeParameters(map);
                     if (!map.containsKey(PROTOCOL_KEY)) {
@@ -346,7 +312,9 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
                     for (URL url : urls) {
                         url = URLBuilder.from(url)
+                                //把注册中心的协议放到url的 registry 参数中
                                 .addParameter(REGISTRY_KEY, url.getProtocol())
+                                //此处的协议默认为registry registry://127.0.0.1:2181/path?registry=zookeeper
                                 .setProtocol(REGISTRY_PROTOCOL)
                                 .build();
                         if ((provider && url.getParameter(REGISTER_KEY, true))
@@ -361,7 +329,6 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     }
 
     /**
-     *
      * Load the monitor config from the system properties and conversation it to {@link URL}
      *
      * @param registryURL
@@ -439,7 +406,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
      * methods configured in the configuration file are included in the interface of remote service
      *
      * @param interfaceClass the interface of remote service
-     * @param methods the methods configured
+     * @param methods        the methods configured
      */
     protected void checkInterfaceAndMethods(Class<?> interfaceClass, List<MethodConfig> methods) {
         // interface cannot be null
@@ -559,12 +526,12 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
             if (CollectionUtils.isEmpty(registries)) {
                 setRegistries(
                         ConfigManager.getInstance().getDefaultRegistries()
-                        .filter(CollectionUtils::isNotEmpty)
-                        .orElseGet(() -> {
-                            RegistryConfig registryConfig = new RegistryConfig();
-                            registryConfig.refresh();
-                            return Arrays.asList(registryConfig);
-                        })
+                                .filter(CollectionUtils::isNotEmpty)
+                                .orElseGet(() -> {
+                                    RegistryConfig registryConfig = new RegistryConfig();
+                                    registryConfig.refresh();
+                                    return Arrays.asList(registryConfig);
+                                })
                 );
             }
         } else {
@@ -621,7 +588,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                 ConfigManager configManager = ConfigManager.getInstance();
                 ConfigCenterConfig cc = configManager.getConfigCenter().orElse(new ConfigCenterConfig());
                 cc.setParameters(new HashMap<>());
-                cc.getParameters().put(org.apache.dubbo.remoting.Constants.CLIENT_KEY,rc.getClient());
+                cc.getParameters().put(org.apache.dubbo.remoting.Constants.CLIENT_KEY, rc.getClient());
                 cc.setProtocol(rc.getProtocol());
                 cc.setAddress(rc.getAddress());
                 cc.setHighestPriority(false);

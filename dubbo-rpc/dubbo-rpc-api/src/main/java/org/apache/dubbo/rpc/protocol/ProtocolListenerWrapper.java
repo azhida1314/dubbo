@@ -18,21 +18,15 @@ package org.apache.dubbo.rpc.protocol;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;
-import org.apache.dubbo.rpc.Exporter;
-import org.apache.dubbo.rpc.ExporterListener;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.InvokerListener;
-import org.apache.dubbo.rpc.Protocol;
-import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.*;
 import org.apache.dubbo.rpc.listener.ListenerExporterWrapper;
 import org.apache.dubbo.rpc.listener.ListenerInvokerWrapper;
 
 import java.util.Collections;
 
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PROTOCOL;
-
-import static org.apache.dubbo.rpc.Constants.INVOKER_LISTENER_KEY;
 import static org.apache.dubbo.rpc.Constants.EXPORTER_LISTENER_KEY;
+import static org.apache.dubbo.rpc.Constants.INVOKER_LISTENER_KEY;
 
 /**
  * ListenerProtocol
@@ -55,6 +49,7 @@ public class ProtocolListenerWrapper implements Protocol {
 
     @Override
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+        //如果是 registry 打头的协议 执行下一个类
         if (REGISTRY_PROTOCOL.equals(invoker.getUrl().getProtocol())) {
             return protocol.export(invoker);
         }

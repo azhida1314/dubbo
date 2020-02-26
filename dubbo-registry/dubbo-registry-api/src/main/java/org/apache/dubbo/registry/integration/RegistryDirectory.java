@@ -22,11 +22,7 @@ import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
-import org.apache.dubbo.common.utils.Assert;
-import org.apache.dubbo.common.utils.CollectionUtils;
-import org.apache.dubbo.common.utils.NetUtils;
-import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.common.utils.UrlUtils;
+import org.apache.dubbo.common.utils.*;
 import org.apache.dubbo.configcenter.DynamicConfiguration;
 import org.apache.dubbo.registry.NotifyListener;
 import org.apache.dubbo.registry.Registry;
@@ -35,49 +31,18 @@ import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Protocol;
 import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.cluster.Cluster;
-import org.apache.dubbo.rpc.cluster.Configurator;
-import org.apache.dubbo.rpc.cluster.Router;
-import org.apache.dubbo.rpc.cluster.RouterChain;
-import org.apache.dubbo.rpc.cluster.RouterFactory;
+import org.apache.dubbo.rpc.cluster.*;
 import org.apache.dubbo.rpc.cluster.directory.AbstractDirectory;
 import org.apache.dubbo.rpc.cluster.directory.StaticDirectory;
 import org.apache.dubbo.rpc.cluster.support.ClusterUtils;
 import org.apache.dubbo.rpc.model.ApplicationModel;
 import org.apache.dubbo.rpc.protocol.InvokerWrapper;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.apache.dubbo.common.constants.CommonConstants.ANY_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.DISABLED_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.DUBBO_PROTOCOL;
-import static org.apache.dubbo.common.constants.CommonConstants.ENABLED_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.MONITOR_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PROTOCOL_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.APP_DYNAMIC_CONFIGURATORS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.CATEGORY_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.COMPATIBLE_CONFIG_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.CONFIGURATORS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.DEFAULT_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.DYNAMIC_CONFIGURATORS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.EMPTY_PROTOCOL;
-import static org.apache.dubbo.common.constants.RegistryConstants.PROVIDERS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.ROUTERS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.ROUTE_PROTOCOL;
+import static org.apache.dubbo.common.constants.CommonConstants.*;
+import static org.apache.dubbo.common.constants.RegistryConstants.*;
 import static org.apache.dubbo.registry.Constants.CONFIGURATORS_SUFFIX;
 import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.ROUTER_KEY;
@@ -165,10 +130,19 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         this.registry = registry;
     }
 
+    /**
+     * consumer://10.2.62.152/org.apache.dubbo.demo.DemoService?application=demo-consumer&category=providers,configurators,routers&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1839&qos.port=33333&release=2.7.4&side=consumer&sticky=false&timestamp=1576044660196
+     *
+     * @param url
+     */
     public void subscribe(URL url) {
         setConsumerUrl(url);
+        //监听自身应用的配置
         CONSUMER_CONFIGURATION_LISTENER.addNotifyListener(this);
+        //自己服务的配置
         serviceConfigurationListener = new ReferenceConfigurationListener(this, url);
+        //org.apache.dubbo.registry.integration.RegistryDirectory.notify
+        //在注册监听器的时候  也就创建了invoker   org.apache.dubbo.registry.support.FailbackRegistry.subscribe
         registry.subscribe(url, this);
     }
 
@@ -205,6 +179,12 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
     }
 
+    /**
+     * 当注册中心节点发生变化
+     * 处理回调通知 重新引入
+     *
+     * @param urls The list of registered information , is always not empty. The meaning is the same as the return value of {@link org.apache.dubbo.registry.RegistryService#lookup(URL)}.
+     */
     @Override
     public synchronized void notify(List<URL> urls) {
         Map<String, List<URL>> categoryUrls = urls.stream()
@@ -222,20 +202,23 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
                     return "";
                 }));
 
+        //初始化配置
         List<URL> configuratorURLs = categoryUrls.getOrDefault(CONFIGURATORS_CATEGORY, Collections.emptyList());
         this.configurators = Configurator.toConfigurators(configuratorURLs).orElse(this.configurators);
-
+        //路由链
         List<URL> routerURLs = categoryUrls.getOrDefault(ROUTERS_CATEGORY, Collections.emptyList());
         toRouters(routerURLs).ifPresent(this::addRouters);
 
-        // providers
+        //服务提供者 providers
         List<URL> providerURLs = categoryUrls.getOrDefault(PROVIDERS_CATEGORY, Collections.emptyList());
+        //有变化 或者第一次启动拉取数据
         refreshOverrideAndInvoker(providerURLs);
     }
 
     private void refreshOverrideAndInvoker(List<URL> urls) {
         // mock zookeeper://xxx?mock=return null
         overrideDirectoryUrl();
+        //把拿到的providers列表解析成多个invoker对象 放入到服务目录的列表中
         refreshInvoker(urls);
     }
 
@@ -251,20 +234,24 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
      *
      * @param invokerUrls this parameter can't be null
      */
-    // TODO: 2017/8/31 FIXME The thread pool should be used to refresh the address, otherwise the task may be accumulated.
     private void refreshInvoker(List<URL> invokerUrls) {
         Assert.notNull(invokerUrls, "invokerUrls should not be null");
 
         if (invokerUrls.size() == 1
                 && invokerUrls.get(0) != null
                 && EMPTY_PROTOCOL.equals(invokerUrls.get(0).getProtocol())) {
-            this.forbidden = true; // Forbid to access
+            // Forbid to access
+            this.forbidden = true;
             this.invokers = Collections.emptyList();
+
             routerChain.setInvokers(this.invokers);
-            destroyAllInvokers(); // Close all invokers
+            // Close all invokers
+            destroyAllInvokers();
         } else {
-            this.forbidden = false; // Allow to access
-            Map<String, Invoker<T>> oldUrlInvokerMap = this.urlInvokerMap; // local reference
+            // Allow to access
+            this.forbidden = false;
+            // local reference
+            Map<String, Invoker<T>> oldUrlInvokerMap = this.urlInvokerMap;
             if (invokerUrls == Collections.<URL>emptyList()) {
                 invokerUrls = new ArrayList<>();
             }
@@ -272,12 +259,14 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
                 invokerUrls.addAll(this.cachedInvokerUrls);
             } else {
                 this.cachedInvokerUrls = new HashSet<>();
-                this.cachedInvokerUrls.addAll(invokerUrls);//Cached invoker urls, convenient for comparison
+                //Cached invoker urls, convenient for comparison
+                this.cachedInvokerUrls.addAll(invokerUrls);
             }
             if (invokerUrls.isEmpty()) {
                 return;
             }
-            Map<String, Invoker<T>> newUrlInvokerMap = toInvokers(invokerUrls);// Translate url list to Invoker map
+            // Translate url list to Invoker map  把服务提供者url翻译成invoker 放入到服务目录中
+            Map<String, Invoker<T>> newUrlInvokerMap = toInvokers(invokerUrls);
 
             /**
              * If the calculation is wrong, it is not processed.
@@ -296,12 +285,14 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
             List<Invoker<T>> newInvokers = Collections.unmodifiableList(new ArrayList<>(newUrlInvokerMap.values()));
             // pre-route and build cache, notice that route cache should build on original Invoker list.
             // toMergeMethodInvokerMap() will wrap some invokers having different groups, those wrapped invokers not should be routed.
+
             routerChain.setInvokers(newInvokers);
             this.invokers = multiGroup ? toMergeInvokerList(newInvokers) : newInvokers;
             this.urlInvokerMap = newUrlInvokerMap;
 
             try {
-                destroyUnusedInvokers(oldUrlInvokerMap, newUrlInvokerMap); // Close the unused Invoker
+                // Close the unused Invoker
+                destroyUnusedInvokers(oldUrlInvokerMap, newUrlInvokerMap);
             } catch (Exception e) {
                 logger.warn("destroyUnusedInvokers error. ", e);
             }
@@ -400,7 +391,7 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
                         " to consumer " + NetUtils.getLocalHost() + ", supported protocol: " +
                         ExtensionLoader.getExtensionLoader(Protocol.class).getSupportedExtensions()));
                 continue;
-            }
+            }//dubbo://10.2.62.152:20881/org.apache.dubbo.demo.DemoService?anyhost=true&application=demo-consumer&bean.name=org.apache.dubbo.demo.DemoService&check=false&deprecated=false&dubbo=2.0.2&dynamic=true&generic=false&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1982&qos.port=33333&register.ip=10.2.62.152&release=2.7.4&remote.application=demo-provider&side=consumer&sticky=false&timestamp=1576043302102
             URL url = mergeUrl(providerUrl);
 
             String key = url.toFullString(); // The parameter urls are sorted
@@ -558,6 +549,11 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
     }
 
+    /**
+     * 经过理由后的额可用的invoker
+     * @param invocation
+     * @return
+     */
     @Override
     public List<Invoker<T>> doList(Invocation invocation) {
         if (forbidden) {
@@ -575,6 +571,7 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         List<Invoker<T>> invokers = null;
         try {
             // Get invokers from cache, only runtime routers will be executed.
+            //执行路由策略 找到可用的 invoker 集合
             invokers = routerChain.route(getConsumerUrl(), invocation);
         } catch (Throwable t) {
             logger.error("Failed to execute router: " + getUrl() + ", cause: " + t.getMessage(), t);
@@ -633,6 +630,13 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         return false;
     }
 
+    /**
+     * 构建路由链
+     * 内部  对条件路由（appRoute ServiceRoute）创建了监听器 并进行了初始化
+     * 标签路由没有做处理
+     *
+     * @param url
+     */
     public void buildRouterChain(URL url) {
         this.setRouterChain(RouterChain.buildChain(url));
     }
@@ -668,12 +672,15 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
     private void overrideDirectoryUrl() {
         // merge override parameters
         this.overrideDirectoryUrl = directoryUrl;
-        List<Configurator> localConfigurators = this.configurators; // local reference
+        // local reference
+        List<Configurator> localConfigurators = this.configurators;
         doOverrideUrl(localConfigurators);
-        List<Configurator> localAppDynamicConfigurators = CONSUMER_CONFIGURATION_LISTENER.getConfigurators(); // local reference
+        // local reference
+        List<Configurator> localAppDynamicConfigurators = CONSUMER_CONFIGURATION_LISTENER.getConfigurators();
         doOverrideUrl(localAppDynamicConfigurators);
         if (serviceConfigurationListener != null) {
-            List<Configurator> localDynamicConfigurators = serviceConfigurationListener.getConfigurators(); // local reference
+            // local reference
+            List<Configurator> localDynamicConfigurators = serviceConfigurationListener.getConfigurators();
             doOverrideUrl(localDynamicConfigurators);
         }
     }

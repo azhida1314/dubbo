@@ -18,30 +18,16 @@ package org.apache.dubbo.config.spring;
 
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.config.ApplicationConfig;
-import org.apache.dubbo.config.ConfigCenterConfig;
-import org.apache.dubbo.config.MetadataReportConfig;
-import org.apache.dubbo.config.MetricsConfig;
-import org.apache.dubbo.config.ModuleConfig;
-import org.apache.dubbo.config.MonitorConfig;
-import org.apache.dubbo.config.ProtocolConfig;
-import org.apache.dubbo.config.ProviderConfig;
-import org.apache.dubbo.config.RegistryConfig;
-import org.apache.dubbo.config.ServiceConfig;
+import org.apache.dubbo.config.*;
 import org.apache.dubbo.config.annotation.Service;
 import org.apache.dubbo.config.spring.context.event.ServiceBeanExportedEvent;
 import org.apache.dubbo.config.spring.extension.SpringExtensionFactory;
-
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.BeanFactoryUtils;
 import org.springframework.beans.factory.BeanNameAware;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.ApplicationEventPublisherAware;
-import org.springframework.context.ApplicationListener;
+import org.springframework.context.*;
 import org.springframework.context.event.ContextRefreshedEvent;
 
 import java.util.ArrayList;
@@ -70,6 +56,7 @@ public class ServiceBean<T> extends ServiceConfig<T> implements InitializingBean
 
     private transient String beanName;
 
+    //用于表示当前的 Spring 容器是否支持 ApplicationListener
     private transient boolean supportedApplicationListener;
 
     private ApplicationEventPublisher applicationEventPublisher;
@@ -107,10 +94,12 @@ public class ServiceBean<T> extends ServiceConfig<T> implements InitializingBean
 
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
+        //  是否已导出 && 是不是已被取消导出
         if (!isExported() && !isUnexported()) {
             if (logger.isInfoEnabled()) {
                 logger.info("The service ready on spring started. service: " + getInterface());
             }
+            // 导出服务
             export();
         }
     }
@@ -118,6 +107,7 @@ public class ServiceBean<T> extends ServiceConfig<T> implements InitializingBean
     @Override
     @SuppressWarnings({"unchecked", "deprecation"})
     public void afterPropertiesSet() throws Exception {
+        //默认的provider标签
         if (getProvider() == null) {
             Map<String, ProviderConfig> providerConfigMap = applicationContext == null ? null : BeanFactoryUtils.beansOfTypeIncludingAncestors(applicationContext, ProviderConfig.class, false, false);
             if (providerConfigMap != null && providerConfigMap.size() > 0) {
@@ -314,6 +304,7 @@ public class ServiceBean<T> extends ServiceConfig<T> implements InitializingBean
             }
         }
         if (!supportedApplicationListener) {
+            //服务暴露
             export();
         }
     }

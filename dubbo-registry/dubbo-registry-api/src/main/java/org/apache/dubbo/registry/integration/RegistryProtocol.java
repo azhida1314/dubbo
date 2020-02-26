@@ -33,11 +33,7 @@ import org.apache.dubbo.registry.RegistryFactory;
 import org.apache.dubbo.registry.RegistryService;
 import org.apache.dubbo.registry.support.ProviderConsumerRegTable;
 import org.apache.dubbo.registry.support.ProviderInvokerWrapper;
-import org.apache.dubbo.rpc.Exporter;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.Protocol;
-import org.apache.dubbo.rpc.ProxyFactory;
-import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.*;
 import org.apache.dubbo.rpc.cluster.Cluster;
 import org.apache.dubbo.rpc.cluster.Configurator;
 import org.apache.dubbo.rpc.model.ApplicationModel;
@@ -52,59 +48,16 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
-import static org.apache.dubbo.common.constants.CommonConstants.ANY_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.APPLICATION_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.CLUSTER_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
-import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.HIDE_KEY_PREFIX;
-import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.METHODS_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.MONITOR_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PATH_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.RELEASE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.TIMESTAMP_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.*;
 import static org.apache.dubbo.common.constants.FilterConstants.VALIDATION_KEY;
-import static org.apache.dubbo.common.constants.QosConstants.ACCEPT_FOREIGN_IP;
-import static org.apache.dubbo.common.constants.QosConstants.QOS_ENABLE;
-import static org.apache.dubbo.common.constants.QosConstants.QOS_HOST;
-import static org.apache.dubbo.common.constants.QosConstants.QOS_PORT;
-import static org.apache.dubbo.common.constants.RegistryConstants.CATEGORY_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.CONFIGURATORS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.CONSUMERS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.OVERRIDE_PROTOCOL;
-import static org.apache.dubbo.common.constants.RegistryConstants.PROVIDERS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PROTOCOL;
-import static org.apache.dubbo.common.constants.RegistryConstants.ROUTERS_CATEGORY;
+import static org.apache.dubbo.common.constants.QosConstants.*;
+import static org.apache.dubbo.common.constants.RegistryConstants.*;
 import static org.apache.dubbo.common.utils.UrlUtils.classifyUrls;
-import static org.apache.dubbo.registry.Constants.CONFIGURATORS_SUFFIX;
-import static org.apache.dubbo.registry.Constants.CONSUMER_PROTOCOL;
-import static org.apache.dubbo.registry.Constants.DEFAULT_REGISTRY;
-import static org.apache.dubbo.registry.Constants.EXTRA_KEYS_KEY;
-import static org.apache.dubbo.registry.Constants.PROVIDER_PROTOCOL;
-import static org.apache.dubbo.registry.Constants.REGISTER_IP_KEY;
-import static org.apache.dubbo.registry.Constants.REGISTER_KEY;
-import static org.apache.dubbo.registry.Constants.SIMPLIFIED_KEY;
-import static org.apache.dubbo.remoting.Constants.BIND_IP_KEY;
-import static org.apache.dubbo.remoting.Constants.BIND_PORT_KEY;
+import static org.apache.dubbo.registry.Constants.*;
+import static org.apache.dubbo.remoting.Constants.*;
 import static org.apache.dubbo.remoting.Constants.CHECK_KEY;
-import static org.apache.dubbo.remoting.Constants.CODEC_KEY;
-import static org.apache.dubbo.remoting.Constants.CONNECTIONS_KEY;
-import static org.apache.dubbo.remoting.Constants.DUBBO_VERSION_KEY;
-import static org.apache.dubbo.remoting.Constants.EXCHANGER_KEY;
-import static org.apache.dubbo.remoting.Constants.SERIALIZATION_KEY;
-import static org.apache.dubbo.rpc.Constants.DEPRECATED_KEY;
-import static org.apache.dubbo.rpc.Constants.INTERFACES;
-import static org.apache.dubbo.rpc.Constants.MOCK_KEY;
-import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
-import static org.apache.dubbo.rpc.cluster.Constants.EXPORT_KEY;
-import static org.apache.dubbo.rpc.cluster.Constants.LOADBALANCE_KEY;
-import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
-import static org.apache.dubbo.rpc.cluster.Constants.WARMUP_KEY;
-import static org.apache.dubbo.rpc.cluster.Constants.WEIGHT_KEY;
+import static org.apache.dubbo.rpc.Constants.*;
+import static org.apache.dubbo.rpc.cluster.Constants.*;
 
 /**
  * RegistryProtocol
@@ -182,7 +135,10 @@ public class RegistryProtocol implements Protocol {
     }
 
     public void register(URL registryUrl, URL registeredProviderUrl) {
+        //获取注册中心
+        //registryFactory 通过spi的ioc实现的
         Registry registry = registryFactory.getRegistry(registryUrl);
+        //底层调用  org.apache.dubbo.registry.zookeeper.ZookeeperRegistry.doRegister 方法
         registry.register(registeredProviderUrl);
     }
 
@@ -191,36 +147,60 @@ public class RegistryProtocol implements Protocol {
         registry.unregister(registeredProviderUrl);
     }
 
+    /**
+     * invoker 包含url = registry://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-provider&dubbo=2.0.2&export=dubbo://10.2.62.152:20881/org.apache.dubbo.demo.DemoService?anyhost=true&application=demo-provider&bean.name=org.apache.dubbo.demo.DemoService&bind.ip=10.2.62.152&bind.port=20881&deprecated=false&dubbo=2.0.2&dynamic=true&generic=false&interface=org.apache.dubbo.demo.DemoService&methods=sayHello&pid=52444&qos.port=22222&release=2.7.4&side=provider&timestamp=1571723374077&pid=52444&qos.port=22222&registry=zookeeper&release=2.7.4&timestamp=1571723374064
+     *
+     * @param originInvoker
+     * @param <T>
+     * @return
+     * @throws RpcException
+     */
     @Override
     public <T> Exporter<T> export(final Invoker<T> originInvoker) throws RpcException {
+        //获取注册中心协议的url  把 Registry 协议替换成 zookeeper
+        //zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService
         URL registryUrl = getRegistryUrl(originInvoker);
         // url to export locally
+        //dubbo://10.2.62.152:20881/org.apache.dubbo.demo.DemoService?anyhost=true
+        //获取服务提供者的url 协议为对应得协议   通过获取传进来的url中export参数的值  上边的方法  把export的值赋成了 providerUrl
         URL providerUrl = getProviderUrl(originInvoker);
 
         // Subscribe the override data
         // FIXME When the provider subscribes, it will affect the scene : a certain JVM exposes the service and call
         //  the same service. Because the subscribed is cached key with the name of the service, it causes the
         //  subscription information to cover.
+
+        //从配置中心获取重新发布的配置  2.7 版本之后
+        //依赖zk的watch机制
         final URL overrideSubscribeUrl = getSubscribedOverrideUrl(providerUrl);
+        //zk的监听器
         final OverrideListener overrideSubscribeListener = new OverrideListener(overrideSubscribeUrl, originInvoker);
         overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);
-
+        //根据配置重写提供方url 主要是后边的参数 超时时间策略等
         providerUrl = overrideUrlWithConfig(providerUrl, overrideSubscribeListener);
+
         //export invoker
+        // 启动协议对应的容器  如果是dubbo协议 启动netty 如果是http协议切标签中指定的server是tomcat 则启动tomcat
         final ExporterChangeableWrapper<T> exporter = doLocalExport(originInvoker, providerUrl);
 
         // url to registry
+        //获取注册中心地址  如果是zookeeper 返回的是zookeeper的Registry
         final Registry registry = getRegistry(originInvoker);
+        //是否是简短的url 可以配置  减少url中的参数值  减少zk的压力
         final URL registeredProviderUrl = getRegisteredProviderUrl(providerUrl, registryUrl);
         ProviderInvokerWrapper<T> providerInvokerWrapper = ProviderConsumerRegTable.registerProvider(originInvoker,
                 registryUrl, registeredProviderUrl);
         //to judge if we need to delay publish
+        //是否需要注册
         boolean register = providerUrl.getParameter(REGISTER_KEY, true);
         if (register) {
+            //向注册中心registryUrl  注册registeredProviderUrl服务地址
+            //根据url选择实现的注册中心
             register(registryUrl, registeredProviderUrl);
             providerInvokerWrapper.setReg(true);
         }
 
+        //兼容2.7 之前的zk配置
         // Deprecated! Subscribe to override rules in 2.6.x or before.
         registry.subscribe(overrideSubscribeUrl, overrideSubscribeListener);
 
@@ -239,10 +219,12 @@ public class RegistryProtocol implements Protocol {
 
     @SuppressWarnings("unchecked")
     private <T> ExporterChangeableWrapper<T> doLocalExport(final Invoker<T> originInvoker, URL providerUrl) {
+
         String key = getCacheKey(originInvoker);
 
         return (ExporterChangeableWrapper<T>) bounds.computeIfAbsent(key, s -> {
             Invoker<?> invokerDelegate = new InvokerDelegate<>(originInvoker, providerUrl);
+            //protocol 有包装类 先走包装类 ProtocolListenerWrapper-》ProtocolFilterWrapper-》 各协议的具体实现类（dubbo/http）
             return new ExporterChangeableWrapper<>((Exporter<T>) protocol.export(invokerDelegate), originInvoker);
         });
     }
@@ -300,8 +282,11 @@ public class RegistryProtocol implements Protocol {
     }
 
     private URL getRegistryUrl(Invoker<?> originInvoker) {
+        //根据url中registry 取得对应的value值
+        // 把对应的value值替换到道歉的注册地址中
         URL registryUrl = originInvoker.getUrl();
         if (REGISTRY_PROTOCOL.equals(registryUrl.getProtocol())) {
+            //取不到默认是dubbo协议
             String protocol = registryUrl.getParameter(REGISTRY_KEY, DEFAULT_REGISTRY);
             registryUrl = registryUrl.setProtocol(protocol).removeParameter(REGISTRY_KEY);
         }
@@ -317,6 +302,7 @@ public class RegistryProtocol implements Protocol {
      */
     private URL getRegisteredProviderUrl(final URL providerUrl, final URL registryUrl) {
         //The address you see at the registry
+        //是否是简短的url 可以配置  减少url中的参数值  减少zk的压力
         if (!registryUrl.getParameter(SIMPLIFIED_KEY, false)) {
             return providerUrl.removeParameters(getFilteredKeys(providerUrl)).removeParameters(
                     MONITOR_KEY, BIND_IP_KEY, BIND_PORT_KEY, QOS_ENABLE, QOS_HOST, QOS_PORT, ACCEPT_FOREIGN_IP, VALIDATION_KEY,
@@ -351,6 +337,8 @@ public class RegistryProtocol implements Protocol {
      * @return
      */
     private URL getProviderUrl(final Invoker<?> originInvoker) {
+        //服务提供者的url 是export=value  的value值
+        //export是前边组装url时设置的
         String export = originInvoker.getUrl().getParameterAndDecoded(EXPORT_KEY);
         if (export == null || export.length() == 0) {
             throw new IllegalArgumentException("The registry export url is null! registry: " + originInvoker.getUrl());
@@ -370,26 +358,40 @@ public class RegistryProtocol implements Protocol {
         return key;
     }
 
+    /**
+     * registry://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-consumer&dubbo=2.0.2&pid=1623&qos.port=33333&refer=application=demo-consumer&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1623&qos.port=33333&register.ip=10.2.62.152&release=2.7.4&side=consumer&sticky=false&timestamp=1576043351756&registry=zookeeper&release=2.7.4&timestamp=1576043557773
+     *
+     * @param type Service class
+     * @param url  URL address for the remote service
+     * @param <T>
+     * @return
+     * @throws RpcException
+     */
     @Override
     @SuppressWarnings("unchecked")
     public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
+        //构建url把registry协议名替换成registry=value的值  比如？registry=zookeeper 注册中心协议替换成zookeeper协议 zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-consumer&dubbo=2.0.2&pid=1623&qos.port=33333&refer=application=demo-consumer&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1623&qos.port=33333&register.ip=10.2.62.152&release=2.7.4&side=consumer&sticky=false&timestamp=1576043351756&release=2.7.4&timestamp=1576043557773
         url = URLBuilder.from(url)
                 .setProtocol(url.getParameter(REGISTRY_KEY, DEFAULT_REGISTRY))
                 .removeParameter(REGISTRY_KEY)
                 .build();
+        //获取注册中心  registryFactory 通过url 判断走哪个实现类
         Registry registry = registryFactory.getRegistry(url);
+        //服务类型是RegistryService 注册中心的服务 服务引入时当前传的type是要引入的class 不会走
         if (RegistryService.class.equals(type)) {
             return proxyFactory.getInvoker((T) registry, type, url);
         }
-
+        // 还原map
         // group="a,b" or group="*"
         Map<String, String> qs = StringUtils.parseQueryString(url.getParameterAndDecoded(REFER_KEY));
         String group = qs.get(GROUP_KEY);
+        //如果分组了
         if (group != null && group.length() > 0) {
             if ((COMMA_SPLIT_PATTERN.split(group)).length > 1 || "*".equals(group)) {
                 return doRefer(getMergeableCluster(), registry, type, url);
             }
         }
+
         return doRefer(cluster, registry, type, url);
     }
 
@@ -397,21 +399,46 @@ public class RegistryProtocol implements Protocol {
         return ExtensionLoader.getExtensionLoader(Cluster.class).getExtension("mergeable");
     }
 
+    /**
+     * 导入
+     *
+     * @param cluster
+     * @param registry
+     * @param type
+     * @param url
+     * @param <T>
+     * @return
+     */
     private <T> Invoker<T> doRefer(Cluster cluster, Registry registry, Class<T> type, URL url) {
+        //创建本地服务目录  可以在zk不能使用时正常调用远程服务  内部有监听器处理变化
         RegistryDirectory<T> directory = new RegistryDirectory<T>(type, url);
         directory.setRegistry(registry);
+        //这里进来时协议已经变为zk
         directory.setProtocol(protocol);
         // all attributes of REFER_KEY
+        //REFER_KEY的所有属性
         Map<String, String> parameters = new HashMap<String, String>(directory.getUrl().getParameters());
+        //消费者地址 consumer://10.2.62.152/org.apache.dubbo.demo.DemoService?application=demo-consumer&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1623&qos.port=33333&release=2.7.4&side=consumer&sticky=false&timestamp=1576043351756
         URL subscribeUrl = new URL(CONSUMER_PROTOCOL, parameters.remove(REGISTER_IP_KEY), 0, type.getName(), parameters);
+        //URL  zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-consumer&dubbo=2.0.2&pid=1623&qos.port=33333&refer=application=demo-consumer&check=false&dubbo=2.0.2&interface=org.apache.dubbo.demo.DemoService&lazy=false&methods=sayHello&pid=1623&qos.port=33333&register.ip=10.2.62.152&release=2.7.4&side=consumer&sticky=false&timestamp=1576043351756&release=2.7.4&timestamp=1576043557773
         if (!ANY_VALUE.equals(url.getServiceInterface()) && url.getParameter(REGISTER_KEY, true)) {
+            //把已经注册到远程的消费者的信息放到本地服务中
             directory.setRegisteredConsumerUrl(getRegisteredConsumerUrl(subscribeUrl, url));
+            //  把消者的信息注册到远程注册中心 org.apache.dubbo.registry.support.FailbackRegistry.register 失败会重试  zk的话底层调用zk创建节点
             registry.register(directory.getRegisteredConsumerUrl());
         }
+        //服务目录加载路由链  向zk中指定的目录订阅变化获取当前已存在的配置项 构建路由链
+        //由配置中心（控制台）加载的策略  如/黑白明单(放在了条件路由的配置中)/标签路由/   条件路由     (有有针对服务的 和针对项目的)
+        //mockInvokersSelector -> TagRouterFactory -> AppRouterFactory ->ServiceRouterFactory  初始化了条件路由  标签路由在下边
         directory.buildRouterChain(subscribeUrl);
+        //监听目录的变化 PROVIDERS_CATEGORY/CONFIGURATORS_CATEGORY/ROUTERS_CATEGORY
+        //路由，配置，服务提供者
+        //生成多个invoker
         directory.subscribe(subscribeUrl.addParameter(CATEGORY_KEY,
                 PROVIDERS_CATEGORY + "," + CONFIGURATORS_CATEGORY + "," + ROUTERS_CATEGORY));
 
+        //实际就是集群的路由策略的实现  mockCluster failOverCluster
+        //把服务目录中的多个invoker合并  一个服务提者对应一个invoker 如果一个服务对应多个提供者则把他们封装成一个invoker 只是这里做集群调用时做了封装
         Invoker invoker = cluster.join(directory);
         ProviderConsumerRegTable.registerConsumer(invoker, url, subscribeUrl, directory);
         return invoker;

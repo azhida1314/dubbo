@@ -59,6 +59,13 @@ public class CompositeConfiguration implements Configuration {
         this.configList.add(pos, configuration);
     }
 
+    /**
+     * 循环获取  拿到就返回
+     * 完成优先级的取之
+     *
+     * @param key
+     * @return
+     */
     @Override
     public Object getInternalProperty(String key) {
         Configuration firstMatchingConfiguration = null;

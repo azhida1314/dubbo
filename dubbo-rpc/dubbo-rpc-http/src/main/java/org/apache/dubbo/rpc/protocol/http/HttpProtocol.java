@@ -16,6 +16,10 @@
  */
 package org.apache.dubbo.rpc.protocol.http;
 
+import com.googlecode.jsonrpc4j.HttpException;
+import com.googlecode.jsonrpc4j.JsonRpcClientException;
+import com.googlecode.jsonrpc4j.JsonRpcServer;
+import com.googlecode.jsonrpc4j.spring.JsonProxyFactoryBean;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.remoting.http.HttpBinder;
 import org.apache.dubbo.remoting.http.HttpHandler;
@@ -23,11 +27,6 @@ import org.apache.dubbo.remoting.http.HttpServer;
 import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.protocol.AbstractProxyProtocol;
-
-import com.googlecode.jsonrpc4j.HttpException;
-import com.googlecode.jsonrpc4j.JsonRpcClientException;
-import com.googlecode.jsonrpc4j.JsonRpcServer;
-import com.googlecode.jsonrpc4j.spring.JsonProxyFactoryBean;
 import org.springframework.remoting.RemoteAccessException;
 
 import javax.servlet.ServletException;
@@ -64,6 +63,9 @@ public class HttpProtocol extends AbstractProxyProtocol {
         return 80;
     }
 
+    /**
+     * 请求处理器
+     */
     private class InternalHandler implements HttpHandler {
 
         private boolean cors;
@@ -72,6 +74,7 @@ public class HttpProtocol extends AbstractProxyProtocol {
             this.cors = cors;
         }
 
+        //处理请求
         @Override
         public void handle(HttpServletRequest request, HttpServletResponse response)
                 throws ServletException {
@@ -99,20 +102,42 @@ public class HttpProtocol extends AbstractProxyProtocol {
 
     }
 
+    /**
+     * 本地导出  启动服务容器
+     *
+     * @param impl
+     * @param type
+     * @param url
+     * @param <T>
+     * @return
+     * @throws RpcException
+     */
     @Override
     protected <T> Runnable doExport(T impl, Class<T> type, URL url) throws RpcException {
         String addr = url.getIp() + ":" + url.getPort();
         HttpServer server = serverMap.get(addr);
         if (server == null) {
+            //InternalHandler 接受请求的处理器
             server = httpBinder.bind(url, new InternalHandler(url.getParameter("cors", false)));
             serverMap.put(addr, server);
         }
         final String path = url.getAbsolutePath();
+        //具体执行的handler
         JsonRpcServer skeleton = new JsonRpcServer(impl, type);
         skeletonMap.put(path, skeleton);
+        // Runnable -run 在撤销导入的时候 清除map中的数据
         return () -> skeletonMap.remove(path);
     }
 
+    /**
+     * 导入
+     *
+     * @param serviceType
+     * @param url
+     * @param <T>
+     * @return
+     * @throws RpcException
+     */
     @SuppressWarnings("unchecked")
     @Override
     protected <T> T doRefer(final Class<T> serviceType, URL url) throws RpcException {

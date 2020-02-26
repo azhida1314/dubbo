@@ -39,7 +39,7 @@ public interface LoadBalance {
     /**
      * select one invoker in list.
      *
-     * @param invokers   invokers.
+     * @param invokers   invokers.所有的provider集合 被包装称了invoker
      * @param url        refer url
      * @param invocation invocation.
      * @return selected invoker.

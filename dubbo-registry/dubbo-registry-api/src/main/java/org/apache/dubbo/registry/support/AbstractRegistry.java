@@ -415,6 +415,7 @@ public abstract class AbstractRegistry implements Registry {
             String category = entry.getKey();
             List<URL> categoryList = entry.getValue();
             categoryNotified.put(category, categoryList);
+            //org.apache.dubbo.registry.integration.RegistryDirectory.notify
             listener.notify(categoryList);
             // We will update our cache file after each notification.
             // When our Registry has a subscribe failure due to network jitter, we can return at least the existing cache URL.

@@ -24,12 +24,7 @@ import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.rpc.Invocation;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcContext;
-import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.RpcInvocation;
+import org.apache.dubbo.rpc.*;
 import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 import org.apache.dubbo.rpc.support.RpcUtils;
@@ -39,12 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.apache.dubbo.rpc.cluster.Constants.CLUSTER_AVAILABLE_CHECK_KEY;
-import static org.apache.dubbo.rpc.cluster.Constants.CLUSTER_STICKY_KEY;
-import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_CLUSTER_AVAILABLE_CHECK;
-import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_CLUSTER_STICKY;
-import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_LOADBALANCE;
-import static org.apache.dubbo.rpc.cluster.Constants.LOADBALANCE_KEY;
+import static org.apache.dubbo.rpc.cluster.Constants.*;
 
 /**
  * AbstractClusterInvoker
@@ -112,8 +102,8 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
      *
      * @param loadbalance load balance policy
      * @param invocation  invocation
-     * @param invokers    invoker candidates
-     * @param selected    exclude selected invokers or not
+     * @param invokers    invoker candidates  所有候选的 invokers  从 当前的集合中选择
+     * @param selected    exclude selected invokers or not  已经执行过的  通常是失败了  下次选出来不应在这个集合中
      * @return the invoker which will final to do invoke.
      * @throws RpcException exception
      */
@@ -124,7 +114,7 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
             return null;
         }
         String methodName = invocation == null ? StringUtils.EMPTY : invocation.getMethodName();
-
+        //是否配置粘滞链接  第一次调用使用invoker1  第二次还使用invoker1
         boolean sticky = invokers.get(0).getUrl()
                 .getMethodParameter(methodName, CLUSTER_STICKY_KEY, DEFAULT_CLUSTER_STICKY);
 
@@ -138,7 +128,7 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
                 return stickyInvoker;
             }
         }
-
+        //选出的invoker已经被调用过重新选择
         Invoker<T> invoker = doSelect(loadbalance, invocation, invokers, selected);
 
         if (sticky) {
@@ -147,6 +137,16 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
         return invoker;
     }
 
+    /**
+     * 找没被用过的
+     *
+     * @param loadbalance
+     * @param invocation
+     * @param invokers
+     * @param selected
+     * @return
+     * @throws RpcException
+     */
     private Invoker<T> doSelect(LoadBalance loadbalance, Invocation invocation,
                                 List<Invoker<T>> invokers, List<Invoker<T>> selected) throws RpcException {
 
@@ -225,10 +225,11 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
                 }
             }
         }
+        //从这个里面选择
         if (!reselectInvokers.isEmpty()) {
             return loadbalance.select(reselectInvokers, getUrl(), invocation);
         }
-
+        //可能为null
         return null;
     }
 
@@ -241,10 +242,12 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
         if (contextAttachments != null && contextAttachments.size() != 0) {
             ((RpcInvocation) invocation).addAttachments(contextAttachments);
         }
-
+        //获得满足路由规则可用的 invoker
         List<Invoker<T>> invokers = list(invocation);
+        //初始化负载策略 默认是随机
         LoadBalance loadbalance = initLoadBalance(invokers, invocation);
         RpcUtils.attachInvocationIdIfAsync(getUrl(), invocation);
+        //进行调用
         return doInvoke(invocation, invokers, loadbalance);
     }
 

@@ -61,13 +61,15 @@ public abstract class ListenableRouter extends AbstractRouter implements Configu
             logger.info("Notification of condition rule, change type is: " + event.getChangeType() +
                     ", raw rule is:\n " + event.getValue());
         }
-
+        //删除类型的事件
         if (event.getChangeType().equals(ConfigChangeType.DELETED)) {
             routerRule = null;
             conditionRouters = Collections.emptyList();
         } else {
             try {
+                //创建 或修改类型的事件
                 routerRule = ConditionRuleParser.parse(event.getValue());
+                //生成条件路由 添加到集合中
                 generateConditions(routerRule);
             } catch (Exception e) {
                 logger.error("Failed to parse the raw condition rule and it will not take effect, please check " +
@@ -104,6 +106,11 @@ public abstract class ListenableRouter extends AbstractRouter implements Configu
         return routerRule != null && routerRule.isValid() && routerRule.isRuntime();
     }
 
+    /**
+     * 把zk中的字符串 转换为 条件路由对象 添加到集合中
+     *
+     * @param rule
+     */
     private void generateConditions(ConditionRouterRule rule) {
         if (rule != null && rule.isValid()) {
             this.conditionRouters = rule.getConditions()
@@ -113,14 +120,22 @@ public abstract class ListenableRouter extends AbstractRouter implements Configu
         }
     }
 
+    /**
+     * 初始化时绑定了监听器
+     * 获取条件路由信息 构造条件路由
+     *
+     * @param ruleKey
+     */
     private synchronized void init(String ruleKey) {
         if (StringUtils.isEmpty(ruleKey)) {
             return;
         }
         String routerKey = ruleKey + RULE_SUFFIX;
         configuration.addListener(routerKey, this);
+        //获取条件信息
         String rule = configuration.getRule(routerKey, DynamicConfiguration.DEFAULT_GROUP);
         if (StringUtils.isNotEmpty(rule)) {
+            //处理获得的节点数据
             this.process(new ConfigChangeEvent(routerKey, rule));
         }
     }

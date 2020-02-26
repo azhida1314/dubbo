@@ -21,19 +21,14 @@ import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.rpc.AsyncRpcResult;
-import org.apache.dubbo.rpc.Invocation;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.RpcInvocation;
+import org.apache.dubbo.rpc.*;
 import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.support.MockInvoker;
 
 import java.util.List;
 
-import static org.apache.dubbo.rpc.cluster.Constants.INVOCATION_NEED_MOCK;
 import static org.apache.dubbo.rpc.Constants.MOCK_KEY;
+import static org.apache.dubbo.rpc.cluster.Constants.INVOCATION_NEED_MOCK;
 
 public class MockClusterInvoker<T> implements Invoker<T> {
 
@@ -68,6 +63,13 @@ public class MockClusterInvoker<T> implements Invoker<T> {
         return directory.getInterface();
     }
 
+    /**
+     * mok 逻辑  可以做服务降级
+     *
+     * @param invocation
+     * @return
+     * @throws RpcException
+     */
     @Override
     public Result invoke(Invocation invocation) throws RpcException {
         Result result = null;
@@ -75,12 +77,14 @@ public class MockClusterInvoker<T> implements Invoker<T> {
         String value = directory.getUrl().getMethodParameter(invocation.getMethodName(), MOCK_KEY, Boolean.FALSE.toString()).trim();
         if (value.length() == 0 || "false".equalsIgnoreCase(value)) {
             //no mock
+            //没有mock  走下一个 FailOverCluster
             result = this.invoker.invoke(invocation);
         } else if (value.startsWith("force")) {
             if (logger.isWarnEnabled()) {
                 logger.warn("force-mock: " + invocation.getMethodName() + " force-mock enabled , url : " + directory.getUrl());
             }
             //force:direct mock
+            //强制mock 不调用业务代码  直接进行 mock的逻辑
             result = doMockInvoke(invocation, null);
         } else {
             //fail-mock
@@ -88,11 +92,11 @@ public class MockClusterInvoker<T> implements Invoker<T> {
                 result = this.invoker.invoke(invocation);
 
                 //fix:#4585
-                if(result.getException() != null && result.getException() instanceof RpcException){
-                    RpcException rpcException= (RpcException)result.getException();
-                    if(rpcException.isBiz()){
-                        throw  rpcException;
-                    }else {
+                if (result.getException() != null && result.getException() instanceof RpcException) {
+                    RpcException rpcException = (RpcException) result.getException();
+                    if (rpcException.isBiz()) {
+                        throw rpcException;
+                    } else {
                         result = doMockInvoke(invocation, rpcException);
                     }
                 }
@@ -105,12 +109,20 @@ public class MockClusterInvoker<T> implements Invoker<T> {
                 if (logger.isWarnEnabled()) {
                     logger.warn("fail-mock: " + invocation.getMethodName() + " fail-mock enabled , url : " + directory.getUrl(), e);
                 }
+                //在服务调用失败的时  走mock逻辑
                 result = doMockInvoke(invocation, e);
             }
         }
         return result;
     }
 
+    /**
+     * 执行mock逻辑
+     *
+     * @param invocation
+     * @param e
+     * @return
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Result doMockInvoke(Invocation invocation, RpcException e) {
         Result result = null;
@@ -118,6 +130,7 @@ public class MockClusterInvoker<T> implements Invoker<T> {
 
         List<Invoker<T>> mockInvokers = selectMockInvoker(invocation);
         if (CollectionUtils.isEmpty(mockInvokers)) {
+            // 一般为空 返回  MockInvoker
             minvoker = (Invoker<T>) new MockInvoker(directory.getUrl(), directory.getInterface());
         } else {
             minvoker = mockInvokers.get(0);

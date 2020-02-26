@@ -21,26 +21,16 @@ import org.apache.dubbo.common.timer.HashedWheelTimer;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.NamedThreadFactory;
 import org.apache.dubbo.registry.NotifyListener;
-import org.apache.dubbo.registry.retry.FailedNotifiedTask;
-import org.apache.dubbo.registry.retry.FailedRegisteredTask;
-import org.apache.dubbo.registry.retry.FailedSubscribedTask;
-import org.apache.dubbo.registry.retry.FailedUnregisteredTask;
-import org.apache.dubbo.registry.retry.FailedUnsubscribedTask;
+import org.apache.dubbo.registry.retry.*;
 import org.apache.dubbo.remoting.Constants;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.dubbo.common.constants.CommonConstants.FILE_KEY;
-import static org.apache.dubbo.registry.Constants.CONSUMER_PROTOCOL;
-import static org.apache.dubbo.registry.Constants.DEFAULT_REGISTRY_RETRY_PERIOD;
-import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_PERIOD_KEY;
+import static org.apache.dubbo.registry.Constants.*;
 
 /**
  * FailbackRegistry. (SPI, Prototype, ThreadSafe)
@@ -288,9 +278,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
     @Override
     public void subscribe(URL url, NotifyListener listener) {
+        ////注册监听器
         super.subscribe(url, listener);
         removeFailedSubscribed(url, listener);
         try {
+            //发送订阅请求到服务器端
             // Sending a subscription request to the server side
             doSubscribe(url, listener);
         } catch (Exception e) {
@@ -366,6 +358,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     protected void doNotify(URL url, NotifyListener listener, List<URL> urls) {
+        //org.apache.dubbo.registry.support.AbstractRegistry.notify(org.apache.dubbo.common.URL, org.apache.dubbo.registry.NotifyListener, java.util.List<org.apache.dubbo.common.URL>)
         super.notify(url, listener, urls);
     }
 

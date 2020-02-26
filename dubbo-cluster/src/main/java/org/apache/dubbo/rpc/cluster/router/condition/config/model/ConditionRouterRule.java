@@ -21,7 +21,7 @@ import org.apache.dubbo.rpc.cluster.router.AbstractRouterRule;
 import java.util.List;
 
 /**
- *
+ *条件
  */
 public class ConditionRouterRule extends AbstractRouterRule {
     public ConditionRouterRule() {

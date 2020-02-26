@@ -93,6 +93,12 @@ final public class MockInvoker<T> implements Invoker<T> {
         return value;
     }
 
+    /**
+     * mock
+     * @param invocation
+     * @return
+     * @throws RpcException
+     */
     @Override
     public Result invoke(Invocation invocation) throws RpcException {
         String mock = getUrl().getParameter(invocation.getMethodName() + "." + MOCK_KEY);

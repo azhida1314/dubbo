@@ -68,12 +68,13 @@ public interface Configuration {
      * Gets a property from the configuration. The default value will return if the configuration doesn't contain
      * the mapping for the specified key.
      *
-     * @param key property to retrieve
+     * @param key          property to retrieve
      * @param defaultValue default value
      * @return the value to which this configuration maps the specified key, or default value if the configuration
      * contains no mapping for this key.
      */
     default Object getProperty(String key, Object defaultValue) {
+        //org.apache.dubbo.common.config.CompositeConfiguration.getInternalProperty
         Object value = getInternalProperty(key);
         return value != null ? value : defaultValue;
     }
@@ -92,6 +93,15 @@ public interface Configuration {
     }
 
 
+    /**
+     * 读取配置  转换成对应的类型
+     *
+     * @param cls
+     * @param key
+     * @param defaultValue
+     * @param <T>
+     * @return
+     */
     default <T> T convert(Class<T> cls, String key, T defaultValue) {
         // we only process String properties for now
         String value = (String) getProperty(key);
